@@ -75,17 +75,18 @@ class Api::V1::AuthController < ApplicationController
   end
 
   def user_json(user)
-    { id: user.id, username: user.username, full_name: user.full_name, email: user.email }
+    { id: user.id, username: user.username, full_name: user.full_name, email: user.email, super_admin: user.super_admin }
   end
 
   def auth_response(token, user, company)
     {
       token: token,
       user: {
-        id:        user.id,
-        username:  user.username,
-        full_name: user.full_name,
-        email:     user.email
+        id:          user.id,
+        username:    user.username,
+        full_name:   user.full_name,
+        email:       user.email,
+        super_admin: user.super_admin
       },
       company: company ? {
         id:                  company.id,

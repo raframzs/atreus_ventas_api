@@ -12,6 +12,15 @@ Rails.application.routes.draw do
 
       get "proxy/image", to: "proxy#image"
 
+      # Admin (super_admin only)
+      namespace :admin do
+        get  :stats,     to: "stats#index"
+        resources :companies, only: [:index, :show, :update, :destroy]
+        resources :users, only: [] do
+          member { post :impersonate }
+        end
+      end
+
       # Recursos (autenticados)
       resources :companies do
         resources :branches,  shallow: true

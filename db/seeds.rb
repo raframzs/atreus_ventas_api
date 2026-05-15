@@ -1,5 +1,21 @@
 # Idempotente — se puede correr múltiples veces sin duplicar datos.
 
+# --- Super-admin ------------------------------------------------------------
+admin = User.find_or_initialize_by(username: "admin")
+if admin.new_record?
+  admin.assign_attributes(
+    full_name:             "Administrador",
+    password:              ENV.fetch("ADMIN_PASSWORD", "Admin123!"),
+    password_confirmation: ENV.fetch("ADMIN_PASSWORD", "Admin123!"),
+    super_admin:           true
+  )
+  admin.save!
+  puts "  Created super-admin: admin / Admin123!"
+else
+  admin.update!(super_admin: true) unless admin.super_admin?
+  puts "  Super-admin already exists"
+end
+
 # --- Usuario demo -----------------------------------------------------------
 demo = User.find_or_initialize_by(username: "demo")
 if demo.new_record?
