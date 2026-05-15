@@ -1,0 +1,31 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  company: one
+  branch: one
+  customer: one
+  seller_id: 
+  status: MyString
+  discount: 9.99
+  subtotal: 9.99
+  total: 9.99
+  notes: MyText
+  invoice_number: MyString
+  invoiced_at: 2026-05-13 15:22:56
+  sent_email_at: 2026-05-13 15:22:56
+  sent_whatsapp_at: 2026-05-13 15:22:56
+
+two:
+  company: two
+  branch: two
+  customer: two
+  seller_id: 
+  status: MyString
+  discount: 9.99
+  subtotal: 9.99
+  total: 9.99
+  notes: MyText
+  invoice_number: MyString
+  invoiced_at: 2026-05-13 15:22:56
+  sent_email_at: 2026-05-13 15:22:56
+  sent_whatsapp_at: 2026-05-13 15:22:56

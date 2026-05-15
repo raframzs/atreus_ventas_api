@@ -1,0 +1,21 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  sale: one
+  product: one
+  name: MyString
+  sku: MyString
+  qty: 1
+  unit_price: 9.99
+  line_total: 9.99
+  photo_url: MyString
+
+two:
+  sale: two
+  product: two
+  name: MyString
+  sku: MyString
+  qty: 1
+  unit_price: 9.99
+  line_total: 9.99
+  photo_url: MyString
