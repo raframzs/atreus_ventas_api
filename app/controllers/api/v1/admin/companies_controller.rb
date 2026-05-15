@@ -6,7 +6,7 @@ module Api
         before_action :set_company, only: [:show, :update, :destroy]
 
         def index
-          companies = Company.includes(:members, :users).order(created_at: :desc)
+          companies = Company.includes(:company_members, :users).order(created_at: :desc)
           render json: companies.map { |c| company_json(c) }
         end
 
@@ -23,14 +23,19 @@ module Api
         end
 
         def destroy
+          # Collect users that belong exclusively to this company before destroying
+          users_to_delete = @company.users.select do |u|
+            u.companies.count == 1
+          end
           @company.destroy!
+          users_to_delete.each(&:destroy!)
           head :no_content
         end
 
         private
 
         def set_company
-          @company = Company.includes(:members, :users).find(params[:id])
+          @company = Company.includes(:company_members, :users).find(params[:id])
         rescue ActiveRecord::RecordNotFound
           render json: { error: "No encontrada" }, status: :not_found
         end
@@ -40,13 +45,13 @@ module Api
         end
 
         def company_json(company)
-          owner_member = company.members.find { |m| m.role == "owner" }
+          owner_member = company.company_members.find { |m| m.role == "owner" }
           owner = owner_member ? company.users.find { |u| u.id == owner_member.user_id } : nil
           {
             id:          company.id,
             name:        company.name,
             enabled:     company.respond_to?(:enabled) ? company.enabled : true,
-            users_count: company.members.size,
+            users_count: company.company_members.size,
             sales_count: company.respond_to?(:sales) ? company.sales.count : 0,
             created_at:  company.created_at,
             owner:       owner ? { id: owner.id, username: owner.username, full_name: owner.full_name } : nil,

@@ -196,10 +196,12 @@ class Api::V1::ProductsController < Api::V1::BaseController
   end
 
   # GET /api/v1/companies/:company_id/products/export
-  PHOTO_MAX_W = 140
-  PHOTO_MAX_H = 140
-  PX_TO_PT    = 0.75
-  ROW_PADDING = 6
+  # Images preserve aspect ratio up to PHOTO_MAX_W × PHOTO_MAX_H.
+  # Row height is calculated dynamically from each image's actual display height.
+  PHOTO_MAX_W = 155
+  PHOTO_MAX_H = 195
+  PX_TO_PT    = 0.75   # 96 DPI: 1px = 0.75pt
+  ROW_PADDING = 16     # extra pts above/below image
 
   def export
     products   = @company.products.includes(:branch).order(:name)
@@ -209,50 +211,60 @@ class Api::V1::ProductsController < Api::V1::BaseController
     package.use_autowidth = false
     wb = package.workbook
 
-    hdr   = wb.styles.add_style(b: true, fg_color: "FFFFFF", bg_color: "0F172A",
-                                 alignment: { horizontal: :center, vertical: :center }, sz: 10)
-    price = wb.styles.add_style(num_fmt: 4, alignment: { vertical: :center, horizontal: :center })
-    ctr   = wb.styles.add_style(alignment: { vertical: :center, horizontal: :center })
+    border = { style: :thin, color: "E2E8F0" }
+    center = { horizontal: :center, vertical: :center, wrap_text: true }
+
+    hdr   = wb.styles.add_style(bg_color: "0F172A", fg_color: "FFFFFF", b: true, sz: 11,
+                                 alignment: center, border: { style: :thin, color: "334155" })
+    ctr   = wb.styles.add_style(alignment: center, border: border)
+    mono  = wb.styles.add_style(font_name: "Courier New", sz: 10,
+                                 alignment: { horizontal: :center, vertical: :center }, border: border)
+    price = wb.styles.add_style(font_name: "Courier New", sz: 10, num_fmt: 4,
+                                 alignment: { horizontal: :center, vertical: :center }, border: border)
 
     wb.add_worksheet(name: "Catálogo") do |ws|
       ws.add_row(
         [ "Foto", "Referencia", "Nombre", "Sucursal", "Precio", "Stock", "Descripción" ],
-        style: hdr, height: 22
+        style: hdr, height: 26
       )
 
       products.each_with_index do |product, idx|
-        row_idx = idx + 1  # 0-based (row 0 = header)
+        row_index = idx + 1  # 0-based for start_at (header occupies index 0)
 
+        # Fetch image and measure BEFORE add_row so row height matches image
         img_w, img_h, tmp = fetch_export_image(product)
         temp_files << tmp if tmp
         row_pts = tmp ? (img_h * PX_TO_PT + ROW_PADDING).ceil : 20
 
         ws.add_row(
-          [ "", product.sku, product.name, product.branch&.name || "Sin asignar",
+          [ nil, product.sku, product.name, product.branch&.name || "Sin asignar",
             product.price, product.stock, product.description.to_s ],
           height: row_pts,
-          style: [ nil, ctr, ctr, ctr, price, ctr, ctr ]
+          style: [ nil, mono, ctr, ctr, price, mono, ctr ]
         )
 
         next unless tmp
 
         ws.add_image(image_src: tmp.path, noSelect: true, noMove: true) do |img|
+          img.start_at 0, row_index
           img.width  = img_w
           img.height = img_h
-          img.start_at 0, row_idx
         end
       end
 
-      ws.column_widths 22, 14, 30, 18, 12, 9, 40
+      # Column A: 26 chars ≈ 182px — contains PHOTO_MAX_W=155px with ~27px margin
+      ws.column_widths 26, 14, 30, 18, 12, 9, 40
     end
 
+    date_str = Date.today.strftime("%d-%b-%Y").downcase
     data = package.to_stream.read
-    temp_files.each { |f| f.close; f.unlink rescue nil }
 
     send_data data,
-      filename: "catalogo-#{@company.name.parameterize}.xlsx",
+      filename: "catalogo-#{@company.name.parameterize}_#{date_str}.xlsx",
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       disposition: "attachment"
+  ensure
+    temp_files.each { |f| f.close; f.unlink rescue nil }
   end
 
   # DELETE /api/v1/companies/:company_id/products/destroy_all
@@ -271,22 +283,18 @@ class Api::V1::ProductsController < Api::V1::BaseController
     render json: { error: "Producto no encontrado" }, status: :not_found
   end
 
+  # Downloads the photo to a Tempfile and computes display size preserving aspect ratio.
+  # Returns [width_px, height_px, tempfile] or [nil, nil, nil] if unavailable.
+  # No resizing — caxlsx renders at the calculated display size for maximum sharpness.
   def fetch_export_image(product)
     return [ nil, nil, nil ] unless product.photo_url.present?
 
-    data = URI.open(product.photo_url, "rb", read_timeout: 10).read
-
-    # Detect real format from magic bytes — ignores filename extension
-    ext = case data.byteslice(0, 8)
-          when ->(b) { b&.start_with?("\xFF\xD8") }       then ".jpg"
-          when ->(b) { b == "\x89PNG\r\n\x1A\n" }         then ".png"
-          when ->(b) { b&.start_with?("GIF8") }           then ".gif"
-          else ".jpg"
-          end
+    ext = File.extname(URI.parse(product.photo_url).path).downcase.presence || ".jpg"
+    ext = ".jpg" unless %w[.jpg .jpeg .png .gif .webp].include?(ext)
 
     tmp = Tempfile.new([ "exp_#{product.id}_", ext ])
     tmp.binmode
-    tmp.write(data)
+    tmp.write(URI.open(product.photo_url, read_timeout: 10).read)
     tmp.rewind
 
     w, h = image_display_size(tmp.path)
@@ -296,8 +304,9 @@ class Api::V1::ProductsController < Api::V1::BaseController
     [ nil, nil, nil ]
   end
 
+  # Scales image to fit PHOTO_MAX_W × PHOTO_MAX_H preserving aspect ratio.
   def image_display_size(path)
-    info   = MiniMagick::Image.new(path)
+    info  = MiniMagick::Image.new(path)
     orig_w = info[:width].to_f
     orig_h = info[:height].to_f
     return [ PHOTO_MAX_W, PHOTO_MAX_H ] if orig_w.zero? || orig_h.zero?

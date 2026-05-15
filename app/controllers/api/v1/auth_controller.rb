@@ -1,5 +1,5 @@
 class Api::V1::AuthController < ApplicationController
-  skip_before_action :authenticate!, only: [ :register, :login ]
+  skip_before_action :authenticate!, only: [ :register, :login, :check_username ]
 
   # PATCH /api/v1/auth/profile
   def update_profile
@@ -21,6 +21,13 @@ class Api::V1::AuthController < ApplicationController
     else
       render_errors(current_user)
     end
+  end
+
+  # GET /api/v1/auth/check_username?username=...
+  def check_username
+    username = params[:username].to_s.downcase.strip
+    taken = User.exists?(username: username)
+    render json: { available: !taken }
   end
 
   # POST /api/v1/auth/register

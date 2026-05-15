@@ -4,9 +4,10 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       # Auth (sin autenticación)
-      post  "auth/register", to: "auth#register"
-      post  "auth/login",    to: "auth#login"
-      get   "auth/me",       to: "auth#me"
+      post  "auth/register",        to: "auth#register"
+      post  "auth/login",          to: "auth#login"
+      get   "auth/me",             to: "auth#me"
+      get   "auth/check_username", to: "auth#check_username"
       patch "auth/profile",  to: "auth#update_profile"
       patch "auth/password", to: "auth#change_password"
 
