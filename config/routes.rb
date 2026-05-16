@@ -13,6 +13,9 @@ Rails.application.routes.draw do
 
       get "proxy/image", to: "proxy#image"
 
+      # Público autenticado — anuncio activo
+      get "announcement", to: "announcements#show"
+
       # Admin (super_admin only)
       namespace :admin do
         get  :stats,     to: "stats#index"
@@ -20,7 +23,11 @@ Rails.application.routes.draw do
         resources :users, only: [] do
           member { post :impersonate }
         end
+        resources :feedback, only: [:index, :update, :destroy]
+        resource :announcement, only: [:show, :create, :update]
       end
+
+      resources :feedback, only: [:create]
 
       # Recursos (autenticados)
       resources :companies do
@@ -31,6 +38,7 @@ Rails.application.routes.draw do
             post   :upload_one
             post   :import
             get    :export
+            get    :export_template
             delete :destroy_all
           end
         end

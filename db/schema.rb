@@ -10,9 +10,18 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_15_163838) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_16_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "announcements", force: :cascade do |t|
+    t.boolean "active", default: false, null: false
+    t.text "body", null: false
+    t.datetime "created_at", null: false
+    t.string "kind", default: "info", null: false
+    t.string "title"
+    t.datetime "updated_at", null: false
+  end
 
   create_table "branches", force: :cascade do |t|
     t.string "city"
@@ -59,6 +68,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_15_163838) do
     t.string "phone"
     t.datetime "updated_at", null: false
     t.index ["company_id"], name: "index_customers_on_company_id"
+  end
+
+  create_table "feedback_reports", force: :cascade do |t|
+    t.jsonb "context_data", default: {}
+    t.string "context_url"
+    t.datetime "created_at", null: false
+    t.text "message", null: false
+    t.string "report_type", default: "other", null: false
+    t.jsonb "screenshot_urls", default: []
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["report_type"], name: "index_feedback_reports_on_report_type"
+    t.index ["status"], name: "index_feedback_reports_on_status"
+    t.index ["user_id"], name: "index_feedback_reports_on_user_id"
   end
 
   create_table "products", force: :cascade do |t|
@@ -135,6 +159,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_15_163838) do
   add_foreign_key "company_members", "companies"
   add_foreign_key "company_members", "users"
   add_foreign_key "customers", "companies"
+  add_foreign_key "feedback_reports", "users"
   add_foreign_key "products", "branches"
   add_foreign_key "products", "companies"
   add_foreign_key "sale_items", "products"

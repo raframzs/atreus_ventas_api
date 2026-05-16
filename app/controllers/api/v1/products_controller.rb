@@ -1,5 +1,5 @@
 class Api::V1::ProductsController < Api::V1::BaseController
-  before_action :set_company, only: [ :index, :create, :bulk_upload, :upload_one, :import, :export, :destroy_all ]
+  before_action :set_company, only: [ :index, :create, :bulk_upload, :upload_one, :import, :export, :export_template, :destroy_all ]
   before_action :set_product, only: [ :show, :update, :destroy ]
 
   # GET /api/v1/companies/:company_id/products
@@ -127,11 +127,11 @@ class Api::V1::ProductsController < Api::V1::BaseController
     return render json: { error: "Sin filas" }, status: :bad_request if rows.empty?
     return render json: { error: "Máximo 500 filas por importación" }, status: :unprocessable_entity if rows.size > 500
 
-    # Validación 1: duplicados en el archivo
-    skus = rows.map { |r| r[:sku_actual].to_s.strip }.reject(&:blank?)
-    dupes = skus.tally.select { |_, n| n > 1 }.keys
+    # Validación 1: duplicados en el archivo — clave compuesta (sku, nombre_actual)
+    keys = rows.map { |r| [ r[:sku_actual].to_s.strip, r[:nombre_actual].to_s.strip ] }.reject { |s, _| s.blank? }
+    dupes = keys.tally.select { |_, n| n > 1 }.keys.map { |s, n| n.present? ? "#{s}/#{n}" : s }
     if dupes.any?
-      return render json: { error: "Refs. duplicadas en el archivo: #{dupes.join(', ')}" }, status: :unprocessable_entity
+      return render json: { error: "Filas duplicadas en el archivo: #{dupes.join(', ')}" }, status: :unprocessable_entity
     end
 
     branch_names = @company.branches.pluck(:name)
@@ -142,8 +142,13 @@ class Api::V1::ProductsController < Api::V1::BaseController
       next if sku_actual.blank?
 
       begin
-        product = @company.products.find_by(sku: sku_actual)
-        attrs   = {}
+        nombre_actual = row[:nombre_actual].to_s.strip
+        product = if nombre_actual.present?
+          @company.products.find_by(sku: sku_actual, name: nombre_actual)
+        else
+          @company.products.find_by(sku: sku_actual)
+        end
+        attrs = {}
 
         sku_nuevo = row[:sku_nuevo].to_s.strip
         attrs[:sku] = sku_nuevo if sku_nuevo.present?
@@ -261,6 +266,93 @@ class Api::V1::ProductsController < Api::V1::BaseController
 
     send_data data,
       filename: "catalogo-#{@company.name.parameterize}_#{date_str}.xlsx",
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      disposition: "attachment"
+  ensure
+    temp_files.each { |f| f.close; f.unlink rescue nil }
+  end
+
+  # GET /api/v1/companies/:company_id/products/export_template
+  # Same photo logic as export but with "actual / nuevo" columns for bulk editing.
+  def export_template
+    products   = @company.products.includes(:branch).order(:name)
+    temp_files = []
+
+    package = Axlsx::Package.new
+    package.use_autowidth = false
+    wb = package.workbook
+
+    border = { style: :thin, color: "E2E8F0" }
+    center = { horizontal: :center, vertical: :center, wrap_text: true }
+    gray_txt = "FF64748B"
+
+    hdr    = wb.styles.add_style(bg_color: "0F172A", fg_color: "FFFFFF", b: true, sz: 10, alignment: center, border: { style: :thin, color: "334155" })
+    actual = wb.styles.add_style(bg_color: "F1F5F9", fg_color: gray_txt, sz: 10, alignment: center, border: border)
+    nuevo  = wb.styles.add_style(alignment: center, border: border, sz: 10)
+    mono_a = wb.styles.add_style(bg_color: "F1F5F9", fg_color: gray_txt, font_name: "Courier New", sz: 10, alignment: { horizontal: :center, vertical: :center }, border: border)
+    mono_n = wb.styles.add_style(font_name: "Courier New", sz: 10, alignment: { horizontal: :center, vertical: :center }, border: border)
+    price_a = wb.styles.add_style(bg_color: "F1F5F9", fg_color: gray_txt, font_name: "Courier New", sz: 10, num_fmt: 4, alignment: { horizontal: :center, vertical: :center }, border: border)
+    price_n = wb.styles.add_style(font_name: "Courier New", sz: 10, num_fmt: 4, alignment: { horizontal: :center, vertical: :center }, border: border)
+
+    wb.add_worksheet(name: "Actualizar") do |ws|
+      ws.add_row(
+        [ "Foto", "Ref. actual ★", "Ref. nueva", "Nombre actual", "Nombre nuevo",
+          "Sucursal actual", "Sucursal nueva", "Precio actual", "Precio nuevo",
+          "Stock actual", "Stock nuevo", "Descripción nueva" ],
+        style: hdr, height: 26
+      )
+
+      products.each_with_index do |product, idx|
+        row_index = idx + 1
+        img_w, img_h, tmp = fetch_export_image(product)
+        temp_files << tmp if tmp
+        row_pts = tmp ? (img_h * PX_TO_PT + ROW_PADDING).ceil : 20
+
+        ws.add_row(
+          [ nil,
+            product.sku, "",
+            product.name, "",
+            product.branch&.name || "Sin asignar", "",
+            product.price, "",
+            product.stock, "",
+            "" ],
+          height: row_pts,
+          style: [ nil, mono_a, mono_n, actual, nuevo, actual, nuevo, price_a, price_n, mono_a, mono_n, nuevo ]
+        )
+
+        next unless tmp
+        ws.add_image(image_src: tmp.path, noSelect: true, noMove: true) do |img|
+          img.start_at 0, row_index
+          img.width  = img_w
+          img.height = img_h
+        end
+      end
+
+      ws.column_widths 26, 14, 14, 28, 28, 18, 18, 12, 12, 9, 9, 40
+    end
+
+    branch_names = @company.branches.pluck(:name).join(", ")
+    wb.add_worksheet(name: "Instrucciones") do |ws|
+      ws.column_widths 20, 70
+      [
+        [ "Columna",           "Descripción" ],
+        [ "Ref. actual ★",     "NO modificar. Clave para encontrar el producto." ],
+        [ "Ref. nueva",        "Dejar en blanco para no cambiar la referencia." ],
+        [ "Nombre nuevo",      "Dejar en blanco para no cambiar el nombre." ],
+        [ "Sucursal nueva",    "Nombre exacto. Opciones: #{branch_names}" ],
+        [ "Precio nuevo",      "Número sin puntos. Dejar en blanco para no cambiar." ],
+        [ "Stock nuevo",       "Número entero. Dejar en blanco para no cambiar." ],
+        [ "Descripción nueva", "Texto libre. Dejar en blanco para no cambiar." ],
+        [ "",                  "" ],
+        [ "REGLA",             "Solo se actualiza un campo si la columna 'nuevo' tiene valor. Las columnas grises son solo referencia." ],
+      ].each { |r| ws.add_row(r) }
+    end
+
+    date_str = Date.today.strftime("%d-%b-%Y").downcase
+    data = package.to_stream.read
+
+    send_data data,
+      filename: "plantilla-#{@company.name.parameterize}_#{date_str}.xlsx",
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       disposition: "attachment"
   ensure
