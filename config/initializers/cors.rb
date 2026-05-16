@@ -8,7 +8,7 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
     extra = ENV.fetch("ALLOWED_ORIGINS", "").split(",").map(&:strip).reject(&:empty?)
 
     # Also allow any *.netlify.app subdomain for preview deploys
-    netlify_pattern = /\Ahttps:\/\/[a-zA-Z0-9\-]+\.netlify\.app\z/
+    netlify_pattern = /\Ahttps:\/\/([a-zA-Z0-9\-]+\.)*netlify\.app\z/
 
     origins(*base_origins, *extra, netlify_pattern)
 
