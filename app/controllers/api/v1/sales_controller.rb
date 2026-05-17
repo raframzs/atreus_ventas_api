@@ -185,7 +185,7 @@ class Api::V1::SalesController < Api::V1::BaseController
   def sale_json(sale)
     base = sale.as_json(
       include: {
-        customer: { only: [ :id, :name, :phone, :email ] },
+        customer: { only: [ :id, :name, :phone, :email, :address, :city, :contact_name, :contact_phone ] },
         branch:   { only: [ :id, :name ] },
         seller:   { only: [ :id, :username, :full_name ] }
       }
