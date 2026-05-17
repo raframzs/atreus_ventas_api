@@ -146,12 +146,27 @@ class Api::V1::SalesController < Api::V1::BaseController
     render json: {
       id:             sale.id,
       invoice_number: sale.invoice_number,
+      status:         sale.status,
+      subtotal:       sale.subtotal,
+      discount:       sale.discount,
       total:          sale.total,
+      notes:          sale.notes,
+      invoiced_at:    sale.invoiced_at,
       shared_pdf_url: sale.shared_pdf_url,
       company_name:   sale.company.name,
-      customer_name:  sale.customer&.name,
       branch_name:    sale.branch&.name,
-      invoiced_at:    sale.invoiced_at
+      customer: {
+        name:          sale.customer&.name,
+        phone:         sale.customer&.phone,
+        email:         sale.customer&.email,
+        address:       sale.customer&.address,
+        city:          sale.customer&.city,
+        contact_name:  sale.customer&.contact_name,
+        contact_phone: sale.customer&.contact_phone
+      },
+      items: sale.sale_items.map { |i|
+        { name: i.name, sku: i.sku, qty: i.qty, unit_price: i.unit_price, line_total: i.line_total, photo_url: i.photo_url }
+      }
     }
   end
 
