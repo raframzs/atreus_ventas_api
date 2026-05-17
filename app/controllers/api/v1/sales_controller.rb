@@ -1,7 +1,7 @@
 class Api::V1::SalesController < Api::V1::BaseController
   before_action :set_company, only: [ :index, :create ]
   before_action :set_sale,    only: [ :show, :update, :destroy, :confirm, :invoice, :cancel, :mark_sent, :share_pdf ]
-  skip_before_action :authenticate_user!, only: [ :public_show ]
+  skip_before_action :authenticate!, only: [ :public_show ]
 
   # GET /api/v1/companies/:company_id/sales
   def index
