@@ -49,9 +49,12 @@ Rails.application.routes.draw do
             post :invoice
             post :cancel
             post :mark_sent
+            post :share_pdf
           end
         end
       end
+      # Ruta pública para ver PDF de una venta (sin auth)
+      get "sales/:id/public", to: "sales#public_show"
     end
   end
 end

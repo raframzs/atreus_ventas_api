@@ -1,6 +1,7 @@
 class Api::V1::SalesController < Api::V1::BaseController
   before_action :set_company, only: [ :index, :create ]
-  before_action :set_sale,    only: [ :show, :update, :destroy, :confirm, :invoice, :cancel, :mark_sent ]
+  before_action :set_sale,    only: [ :show, :update, :destroy, :confirm, :invoice, :cancel, :mark_sent, :share_pdf ]
+  skip_before_action :authenticate_user!, only: [ :public_show ]
 
   # GET /api/v1/companies/:company_id/sales
   def index
@@ -97,6 +98,63 @@ class Api::V1::SalesController < Api::V1::BaseController
     render json: sale_json(@sale)
   end
 
+  # POST /api/v1/sales/:id/share_pdf
+  # Recibe el PDF generado en el browser, lo sube a R2 y devuelve la URL pública.
+  # Si ya existe shared_pdf_url, lo reutiliza sin subir de nuevo.
+  def share_pdf
+    if @sale.shared_pdf_url.present?
+      render json: { url: @sale.shared_pdf_url }
+      return
+    end
+
+    pdf_file = params[:pdf]
+    unless pdf_file.respond_to?(:read)
+      render json: { error: "Falta el archivo PDF" }, status: :unprocessable_entity
+      return
+    end
+
+    unless R2_CLIENT
+      render json: { error: "Almacenamiento no configurado" }, status: :service_unavailable
+      return
+    end
+
+    key = "invoices/#{@sale.id}.pdf"
+    R2_CLIENT.put_object(
+      bucket:       R2_BUCKET,
+      key:          key,
+      body:         pdf_file.read,
+      content_type: "application/pdf"
+    )
+
+    url = "#{R2_PUBLIC_URL}/#{key}"
+    @sale.update_column(:shared_pdf_url, url)
+
+    render json: { url: url }
+  rescue Aws::S3::Errors::ServiceError => e
+    Rails.logger.error "[R2] Error subiendo PDF de venta #{@sale.id}: #{e.message}"
+    render json: { error: "Error al subir el PDF" }, status: :service_unavailable
+  end
+
+  # GET /api/v1/sales/:id/public  — sin autenticación
+  def public_show
+    sale = Sale.includes(:customer, :branch, :sale_items, company: []).find_by(id: params[:id])
+    unless sale&.shared_pdf_url.present?
+      render json: { error: "No encontrado" }, status: :not_found
+      return
+    end
+
+    render json: {
+      id:             sale.id,
+      invoice_number: sale.invoice_number,
+      total:          sale.total,
+      shared_pdf_url: sale.shared_pdf_url,
+      company_name:   sale.company.name,
+      customer_name:  sale.customer&.name,
+      branch_name:    sale.branch&.name,
+      invoiced_at:    sale.invoiced_at
+    }
+  end
+
   private
 
   def set_sale
@@ -136,6 +194,7 @@ class Api::V1::SalesController < Api::V1::BaseController
     base["items"] = sale.sale_items.as_json(
       only: [ :id, :product_id, :name, :sku, :qty, :unit_price, :line_total, :photo_url ]
     )
+    base["shared_pdf_url"] = sale.shared_pdf_url
     base
   end
 end

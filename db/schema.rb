@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_16_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_17_141447) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -131,6 +131,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_16_180000) do
     t.bigint "seller_id", null: false
     t.datetime "sent_email_at"
     t.datetime "sent_whatsapp_at"
+    t.string "shared_pdf_url"
     t.string "status", default: "draft", null: false
     t.decimal "subtotal", precision: 14, scale: 2, default: "0.0", null: false
     t.decimal "total", precision: 14, scale: 2, default: "0.0", null: false
