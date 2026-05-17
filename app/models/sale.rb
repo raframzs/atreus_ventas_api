@@ -41,4 +41,16 @@ class Sale < ApplicationRecord
     tot = [ sub - discount.to_f, 0 ].max
     update_columns(subtotal: sub, total: tot)
   end
+
+  after_destroy :cleanup_r2_pdf
+
+  private
+
+  def cleanup_r2_pdf
+    return unless shared_pdf_url.present? && R2_CLIENT
+    key = "invoices/#{id}.pdf"
+    R2_CLIENT.delete_object(bucket: R2_BUCKET, key: key)
+  rescue Aws::S3::Errors::ServiceError => e
+    Rails.logger.error "[R2] Error borrando PDF de venta #{id}: #{e.message}"
+  end
 end
