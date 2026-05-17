@@ -13,8 +13,10 @@ class Api::V1::ProxyController < Api::V1::BaseController
       return
     end
 
-    data = URI.open(url, "rb", read_timeout: 10).read
-    send_data data, type: "image/jpeg", disposition: "inline"
+    io = URI.open(url, "rb", read_timeout: 10)
+    data = io.read
+    content_type = io.content_type.presence || "image/jpeg"
+    send_data data, type: content_type, disposition: "inline"
   rescue => e
     render json: { error: e.message }, status: :bad_gateway
   end
