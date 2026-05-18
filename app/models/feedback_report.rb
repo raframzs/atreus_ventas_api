@@ -4,7 +4,7 @@ class FeedbackReport < ApplicationRecord
   enum :report_type, { bug: "bug", suggestion: "suggestion", other: "other" }, default: "other"
   enum :status, { pending: "pending", reviewed: "reviewed" }, default: "pending"
 
-  validates :message, presence: true, length: { minimum: 10, maximum: 2000 }
+  validates :message, presence: true, length: { minimum: 3, maximum: 2000 }
   validates :report_type, inclusion: { in: report_types.keys }
 
   scope :recent, -> { order(created_at: :desc) }
