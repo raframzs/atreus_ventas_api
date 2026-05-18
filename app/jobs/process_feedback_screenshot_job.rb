@@ -12,7 +12,7 @@ class ProcessFeedbackScreenshotJob < ApplicationJob
     R2_CLIENT.put_object(
       bucket:       R2_BUCKET,
       key:          key,
-      body:         file_content,
+      body:         Base64.strict_decode64(file_content),
       content_type: content_type
     )
 

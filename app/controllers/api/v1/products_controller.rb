@@ -135,23 +135,24 @@ class Api::V1::ProductsController < Api::V1::BaseController
     end
 
     branch_names = @company.branches.pluck(:name)
-    results = { updated: 0, created: 0, errors: [], warnings: [] }
+    results = { updated: 0, errors: [], warnings: [] }
 
     rows.each do |row|
       sku_actual = row[:sku_actual].to_s.strip
       next if sku_actual.blank?
 
       begin
-        nombre_actual = row[:nombre_actual].to_s.strip
-        product = if nombre_actual.present?
-          @company.products.find_by(sku: sku_actual, name: nombre_actual)
-        else
-          @company.products.find_by(sku: sku_actual)
+        product = @company.products.find_by(sku: sku_actual)
+
+        unless product
+          results[:warnings] << "#{sku_actual}: referencia no encontrada, se ignoró"
+          next
         end
+
         attrs = {}
 
         sku_nuevo = row[:sku_nuevo].to_s.strip
-        attrs[:sku] = sku_nuevo if sku_nuevo.present?
+        attrs[:sku] = sku_nuevo if sku_nuevo.present? && sku_nuevo != sku_actual
 
         name = row[:name].to_s.strip
         attrs[:name] = name if name.present?
@@ -159,7 +160,6 @@ class Api::V1::ProductsController < Api::V1::BaseController
         branch_name = row[:branch_name].to_s.strip
         if branch_name.present?
           branch = @company.branches.find_by(name: branch_name)
-          # Validación 2: sucursal no encontrada → warning, no falla
           if branch
             attrs[:branch] = branch
           else
@@ -167,7 +167,6 @@ class Api::V1::ProductsController < Api::V1::BaseController
           end
         end
 
-        # Validación 3: precio negativo
         if row[:price].present?
           price = row[:price].to_f
           if price < 0
@@ -183,14 +182,8 @@ class Api::V1::ProductsController < Api::V1::BaseController
         desc = row[:description].to_s.strip
         attrs[:description] = desc if desc.present?
 
-        if product
-          product.update!(attrs)
-          results[:updated] += 1
-        else
-          create_attrs = { sku: sku_actual, name: sku_actual, is_active: true }.merge(attrs)
-          @company.products.create!(create_attrs)
-          results[:created] += 1
-        end
+        product.update!(attrs)
+        results[:updated] += 1
       rescue => e
         results[:errors] << "#{sku_actual}: #{e.message}"
       end

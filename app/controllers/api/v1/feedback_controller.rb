@@ -6,10 +6,10 @@ module Api
 
         if report.save
           Array(params[:screenshots]).each do |file|
-            content = file.read
+            encoded = Base64.strict_encode64(file.read)
             ProcessFeedbackScreenshotJob.perform_later(
               report.id,
-              content,
+              encoded,
               file.original_filename,
               file.content_type
             )
