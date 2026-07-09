@@ -6,7 +6,7 @@ gem "puma", ">= 5.0"
 
 # Auth
 gem "bcrypt", "~> 3.1"
-gem "jwt", "~> 2.9"
+gem "jwt", "~> 3.2"
 
 # API
 gem "rack-cors"
